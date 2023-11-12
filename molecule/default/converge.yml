@@ -2,6 +2,12 @@
 - name: Converge
   hosts: all
   tasks:
+    - debug:
+        msg: |
+          inventory_hostname : {{ inventory_hostname }}
+          ansible_host : {{ ansible_host }}
+          ansible_user : {{ ansible_user }}
+          ansible_become_user : {{ ansible_become_user }}
     - name: "Run bootstrap pre tasks"
       ansible.builtin.import_role:
         name: wandansible.bootstrap
