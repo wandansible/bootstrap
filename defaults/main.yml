@@ -1,0 +1,22 @@
+---
+bootstrap_ansible_playbook_dir: "{{ ansible_config_file | dirname }}"
+
+bootstrap_host_override_prompt: true
+bootstrap_username: ""
+bootstrap_password: ""
+bootstrap_become_method: ""
+bootstrap_root_password: ""
+bootstrap_ssh_password_authentication: ""
+bootstrap_user_remove: ""
+
+bootstrap_apt_upgrade: true
+bootstrap_packages:
+  - sudo
+
+provision_username: "ansible-provision"
+provision_uid: 50000
+provision_groups:
+  - sudo
+provision_shell: /bin/bash
+provision_ssh_key_type: ed25519
+provision_ssh_key_has_passphrase: true

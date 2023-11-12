@@ -1,0 +1,196 @@
+---
+- name: Prompt user for configuration
+  block:
+    - name: Prompt to override connection hostname/ip
+      ansible.builtin.pause:
+        prompt: >-
+          Which IP or hostname should be used to provision {{ inventory_hostname }}?
+          (Hit enter to not override)
+      register: _bootstrap_host
+      when:
+        - inventory_hostname == ansible_host
+        - bootstrap_host_override_prompt | bool
+
+    - name: Set bootstrap host fact
+      ansible.builtin.set_fact:
+        bootstrap_host: >-
+          {{ _bootstrap_host.user_input | default(ansible_host) }}
+
+    - name: Prompt for bootstrap username
+      ansible.builtin.pause:
+        prompt: >-
+          Which username should be used for ssh to provision {{ inventory_hostname }}?
+      register: _bootstrap_username
+      when: bootstrap_username == ""
+
+    - name: Set bootstrap username fact
+      ansible.builtin.set_fact:
+        bootstrap_username: "{{ _bootstrap_username.user_input }}"
+      when: bootstrap_username == ""
+
+    - name: Prompt for bootstrap password
+      ansible.builtin.pause:
+        prompt: >-
+          What is the password for user account {{ bootstrap_username }}
+          on {{ inventory_hostname }}?
+        echo: false
+      register: _bootstrap_password
+      when: bootstrap_password == ""
+
+    - name: Set bootstrap password fact
+      ansible.builtin.set_fact:
+        bootstrap_password: "{{ _bootstrap_password.user_input }}"
+      when: bootstrap_password == ""
+
+    - name: Prompt for become method
+      ansible.builtin.pause:
+        prompt: >-
+          What method should be used to become root on {{ inventory_hostname }}? (sudo or su)
+      register: _bootstrap_become_method
+      when: bootstrap_become_method == ""
+
+    - name: Set bootstrap become method fact
+      ansible.builtin.set_fact:
+        bootstrap_become_method: "{{ _bootstrap_become_method.user_input }}"
+      when: bootstrap_become_method == ""
+
+    - name: Prompt for root password when become method is su
+      ansible.builtin.pause:
+        prompt: >-
+          What is the root account password on {{ inventory_hostname }}?
+        echo: false
+      register: _bootstrap_root_password
+      when:
+        - bootstrap_become_method == "su"
+        - bootstrap_root_password == ""
+
+    - name: Set bootstrap root password fact
+      ansible.builtin.set_fact:
+        bootstrap_root_password: "{{ _bootstrap_root_password.user_input }}"
+      when:
+        - bootstrap_become_method == "su"
+        - bootstrap_root_password == ""
+
+    - name: Set bootstrap become password fact
+      ansible.builtin.set_fact:
+        bootstrap_become_pass: >-
+          {{ bootstrap_root_password if bootstrap_become_method == "su" else bootstrap_password }}
+
+    - name: Prompt for ssh authentication mechanism
+      ansible.builtin.pause:
+        prompt: >-
+          Should ssh password authentication be used to provision {{ inventory_hostname }}? (yes/no)
+      register: _bootstrap_ssh_password_auth
+      when: bootstrap_ssh_password_authentication == ""
+
+    - name: Set bootstrap ssh password authentication fact
+      ansible.builtin.set_fact:
+        bootstrap_ssh_password_authentication: "{{ _bootstrap_ssh_password_auth.user_input }}"
+      when: bootstrap_ssh_password_authentication == ""
+
+    - name: Prompt for bootstrap user deletion
+      ansible.builtin.pause:
+        prompt: >-
+          Should the {{ bootstrap_username }} account be deleted from
+          {{ inventory_hostname }} before provisioning begins? (yes/no)
+      register: _bootstrap_user_remove
+      when: bootstrap_user_remove == ""
+
+    - name: Set bootstrap user remove fact
+      ansible.builtin.set_fact:
+        bootstrap_user_remove: "{{ _bootstrap_user_remove.user_input }}"
+      when: bootstrap_user_remove == ""
+
+- name: Create bootstrap provision user
+  block:
+    - name: Create bootstrap provision user using ssh password-based authentication
+      vars:
+        ansible_host: "{{ bootstrap_host }}"
+        ansible_user: "{{ bootstrap_username }}"
+        ansible_ssh_pass: "{{ bootstrap_password }}"
+        ansible_become_method: "{{ bootstrap_become_method }}"
+        ansible_become_pass: "{{ bootstrap_become_pass }}"
+      ansible.builtin.include_tasks: create-provision-user.yml
+      when: >-
+        bootstrap_ssh_password_authentication | bool
+        or bootstrap_ssh_password_authentication | lower == "y"
+
+    - name: Create bootstrap provision user using ssh key-based authentication
+      vars:
+        ansible_host: "{{ bootstrap_host }}"
+        ansible_user: "{{ bootstrap_username }}"
+        ansible_become_method: "{{ bootstrap_become_method }}"
+        ansible_become_pass: "{{ bootstrap_become_pass }}"
+      ansible.builtin.include_tasks: create-provision-user.yml
+      when: >-
+        not bootstrap_ssh_password_authentication | bool
+        or bootstrap_ssh_password_authentication | lower == "n"
+
+- name: Configure ssh private key for provision user on machine running ansible
+  become: false
+  delegate_to: localhost
+  block:
+    - name: Generate temporary filename for ssh private key
+      ansible.builtin.set_fact:
+        _provision_ssh_private_key_filename: >-
+          {{ bootstrap_ansible_playbook_dir
+             + "/.ansible/.ssh/ssh_" + provision_ssh_key_type
+             + "_" + inventory_hostname }}
+
+    - name: Create ansible ssh directory
+      ansible.builtin.file:
+        path: "{{ bootstrap_ansible_playbook_dir }}/.ansible/.ssh/"
+        state: directory
+        mode: u=rwx,g=,o=
+
+    - name: Store ssh private key in local file
+      ansible.builtin.copy:
+        content: "{{ _provision_ssh_private_key.content | b64decode }}"
+        dest: "{{ _provision_ssh_private_key_filename }}"
+        mode: u=rw,g=,o=
+      no_log: true
+
+    - name: Add ssh private key to ssh-agent
+      ansible.builtin.expect:
+        command: "ssh-add {{ _provision_ssh_private_key_filename }}"
+        responses:
+          "Enter passphrase for": "{{ _provision_ssh_key_passphrase }}"
+      when: provision_ssh_key_has_passphrase | bool
+
+# TODO document these in README
+- name: Set provision facts
+  ansible.builtin.set_fact:
+    provision_host: "{{ bootstrap_host }}"
+    provision_username: "{{ provision_username }}"
+    provision_password: "{{ _provision_password }}"
+    provision_ssh_private_key: "{{ _provision_ssh_private_key_filename }}"
+
+- name: Remove bootstrap user
+  when: bootstrap_user_remove | bool or bootstrap_user_remove | lower == "y"
+  block:
+    - name: Print provision user account details
+      ansible.builtin.pause:
+        seconds: 1
+        prompt: |
+          If an error occurs during the ansible play and access is lost to {{ inventory_hostname }},
+          you can manually login as the autogenerated provision user to recover the machine:
+
+          Username: {{ provision_username }}
+          Password: {{ provision_password }}
+          SSH private key passphrase: {{ _provision_ssh_key_passphrase }}
+          SSH private key: {{ provision_ssh_private_key }}
+
+    - name: Remove bootstrap user
+      vars:
+        ansible_host: "{{ provision_host }}"
+        ansible_user: "{{ provision_username }}"
+        ansible_become_pass: "{{ provision_password }}"
+        ansible_ssh_private_key_file: "{{ provision_ssh_private_key }}"
+      ansible.builtin.include_tasks: delete-bootstrap-user.yml
+
+- name: Unset local variables
+  ansible.builtin.set_fact:
+    _bootstrap_password: ""
+    _bootstrap_root_password: ""
+    _provision_password: ""
+    _provision_ssh_key_passphrase: ""

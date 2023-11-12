@@ -1,0 +1,50 @@
+---
+- name: Upgrade all apt packages
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: full
+  when: bootstrap_apt_upgrade | bool
+
+- name: Install packages required for provisioning
+  ansible.builtin.apt:
+    pkg: "{{ bootstrap_packages }}"
+    install_recommends: false
+
+- name: Generate passwords for provision user
+  ansible.builtin.set_fact:
+    _provision_password: >-
+      {{ lookup('community.general.random_string',
+                length=32, min_lower=5, min_upper=5, min_special=5, min_numeric=5) }}
+    _provision_ssh_key_passphrase: >-
+      {{ lookup('community.general.random_string',
+                length=64, min_lower=5, min_upper=5, min_special=5, min_numeric=5)
+         if provision_ssh_key_has_passphrase | bool else None }}
+
+- name: Delete provision user if it already exists
+  ansible.builtin.user:
+    name: "{{ provision_username }}"
+    remove: true
+    state: absent
+
+- name: Create provision user
+  ansible.builtin.user:
+    name: "{{ provision_username }}"
+    password: "{{ _provision_password | password_hash('sha512') }}"
+    comment: "Ansible provision user"
+    uid: "{{ provision_uid }}"
+    groups: "{{ provision_groups }}"
+    shell: "{{ provision_shell }}"
+    generate_ssh_key: true
+    ssh_key_passphrase: "{{ _provision_ssh_key_passphrase | default(omit) }}"
+    ssh_key_type: "{{ provision_ssh_key_type }}"
+  register: _provision_user
+
+- name: Add authorized ssh public key for provision user
+  ansible.posix.authorized_key:
+    user: "{{ provision_username }}"
+    key: "{{ _provision_user.ssh_public_key }}"
+
+- name: Get ssh private key for provision user
+  ansible.builtin.slurp:
+    src: "{{ _provision_user.ssh_key_file }}"
+  register: _provision_ssh_private_key

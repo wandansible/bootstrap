@@ -1,0 +1,11 @@
+---
+- name: Terminate systemd user sessions for bootstrap user
+  ansible.builtin.command:
+    cmd: "loginctl terminate-user {{ bootstrap_username }}"
+  failed_when: false
+
+- name: Remove bootstrap user
+  ansible.builtin.user:
+    name: "{{ bootstrap_username }}"
+    state: absent
+    remove: true
