@@ -1,0 +1,25 @@
+---
+- name: Terminate systemd user sessions for provision user
+  ansible.builtin.command:
+    cmd: "loginctl terminate-user {{ provision_username }}"
+  failed_when: false
+
+- name: Remove provision user
+  ansible.builtin.user:
+    name: "{{ provision_username }}"
+    state: absent
+    remove: true
+
+- name: Configure ssh private key for provision user on machine running ansible
+  become: false
+  delegate_to: localhost
+  block:
+    - name: Remove ssh private key from ssh-agent
+      ansible.builtin.command:
+        cmd: "ssh-add -d {{ provision_ssh_private_key }}"
+      when: provision_ssh_key_has_passphrase | bool
+
+    - name: Remove ssh private key
+      ansible.builtin.file:
+        path: "{{ provision_ssh_private_key }}"
+        state: absent
