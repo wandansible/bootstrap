@@ -17,8 +17,8 @@
         tasks_from: pre
       vars:
         bootstrap_host_override_prompt: false
-        bootstrap_username: root
-        bootstrap_password: root
+        bootstrap_username: ansible
+        bootstrap_password: ansible
         bootstrap_become_method: sudo
         bootstrap_ssh_password_authentication: false
         bootstrap_user_remove: false

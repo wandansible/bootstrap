@@ -1,0 +1,12 @@
+---
+- name: Prepare
+  hosts: all
+  tasks:
+    - name: "Create bootstrap user"
+      ansible.builtin.user:
+        name: ansible
+        password: >-
+          $6$Gfl9xr3j9cqCVS6T$HsC/np/0z1eOBk9z9o/8.TAGsyIuzHRL73puDIB89jAftkvqY.07G3SIEs3Lt7yHjwxDV8AqyHzrbr/L51N.K.
+        comment: Ansible bootstrap user
+        uid: 1000
+        group: sudo
