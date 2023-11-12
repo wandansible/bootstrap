@@ -6,6 +6,7 @@
       ansible.builtin.import_role:
         name: wandansible.bootstrap
         tasks_from: pre
+      become: true
       vars:
         bootstrap_host_override_prompt: false
         bootstrap_username: ansible
@@ -17,7 +18,7 @@
     - name: Create user accounts and groups as provision user
       ansible.builtin.user:
         name: test
-        uid: 1000
+      become: true
       vars:
         ansible_host: "{{ provision_host }}"
         ansible_user: "{{ provision_username }}"
@@ -28,5 +29,6 @@
       ansible.builtin.import_role:
         name: wandansible.bootstrap
         tasks_from: post
+      become: true
       vars:
         ansible_host: "{{ provision_host }}"
