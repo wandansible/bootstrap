@@ -14,6 +14,7 @@
         bootstrap_become_method: sudo
         bootstrap_ssh_password_authentication: false
         bootstrap_user_remove: false
+        provision_ssh_key_has_passphrase: false
 
     - name: Create user accounts and groups as provision user
       ansible.builtin.user:
