@@ -25,6 +25,11 @@ to the corresponding ansible variables:
 
 Once this is done the ansible playbook can be run as normal as your regular account.
 
+Requirements
+------------
+
+To use this role, the python package `passlib` must be installed on the host running ansible.
+
 Role Variables
 --------------
 
