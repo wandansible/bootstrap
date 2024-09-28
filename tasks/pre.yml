@@ -108,6 +108,7 @@
         ansible_host: "{{ bootstrap_host }}"
         ansible_user: "{{ bootstrap_username }}"
         ansible_ssh_pass: "{{ bootstrap_password }}"
+        ansible_ssh_extra_args: "-o PreferredAuthentications=password"
         ansible_become_method: "{{ bootstrap_become_method }}"
         ansible_become_pass: "{{ bootstrap_become_pass }}"
       ansible.builtin.include_tasks: create-provision-user.yml
