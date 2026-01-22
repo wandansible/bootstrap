@@ -156,6 +156,9 @@
         command: "ssh-add {{ _provision_ssh_private_key_filename }}"
         responses:
           "Enter passphrase for": "{{ _provision_ssh_key_passphrase }}"
+      environment:
+        SSH_ASKPASS: ""
+        SSH_ASKPASS_REQUIRE: "never"
       when: provision_ssh_key_has_passphrase | bool
 
 - name: Set provision facts
